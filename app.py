@@ -20,55 +20,78 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # ==========================================
-#           AGENT: LYNN LOGIC
+#           BACKEND HELPER FUNCTIONS
+# ==========================================
+
+def load_local_knowledge():
+    """Reads all PDF/TXT files from the local 'knowledge' folder automatically"""
+    knowledge_text = ""
+    if os.path.exists("knowledge"):
+        for filename in os.listdir("knowledge"):
+            file_path = os.path.join("knowledge", filename)
+            try:
+                if filename.endswith(".pdf"):
+                    reader = PdfReader(file_path)
+                    for page in reader.pages:
+                        knowledge_text += page.extract_text() + "\n"
+                elif filename.endswith(".txt") or filename.endswith(".md"):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        knowledge_text += f.read() + "\n"
+            except Exception as e:
+                print(f"Error reading {filename}: {e}")
+    return knowledge_text
+
+# ==========================================
+#           AGENT: LYNN INTERFACE
 # ==========================================
 
 st.markdown("### ⭐ Lynn: Productivity Coach")
 st.caption("I help you complete the 5-4-3-2-1 Daily System. Discipline equals freedom.")
 
-# 1. State Management (Memory for Name and Chat)
+# 1. State Management
 if "lynn_user_name" not in st.session_state:
     st.session_state.lynn_user_name = None
 if "lynn_messages" not in st.session_state:
     st.session_state.lynn_messages = []
 
-# 2. Knowledge Loader (Brains of the Agent)
-st.sidebar.title("🧠 Lynn's Brain")
-lynn_files = st.sidebar.file_uploader("Upload Instructions/Scripts (Optional)", type=['pdf'], accept_multiple_files=True, key="lynn_uploader")
+# 2. Automatically Load Brain (No UI upload needed)
+lynn_knowledge = load_local_knowledge()
 
-# Function to extract text from uploaded PDFs
-lynn_knowledge_context = ""
-if lynn_files:
-    for f in lynn_files:
-        try:
-            reader = PdfReader(f)
-            for page in reader.pages:
-                lynn_knowledge_context += page.extract_text() + "\n"
-        except Exception as e:
-            st.sidebar.error(f"Error reading {f.name}: {e}")
-
-# 3. User Name Check (First Interaction)
+# 3. User Name Check (Onboarding)
 if not st.session_state.lynn_user_name:
     st.markdown("👋 **Welcome to the 5-4-3-2-1 System.**")
     st.markdown("I'm Lynn. Before we begin, what is your name so I can coach you properly?")
-    name_input = st.text_input("Your Name")
+    name_input = st.text_input("Your Name", placeholder="Enter your name here...")
+    
     if name_input:
         st.session_state.lynn_user_name = name_input
-        # Initial Greeting Trigger
-        st.session_state.lynn_messages.append({
-            "role": "user", 
-            "content": f"My name is {name_input}. Start the coaching session for today."
-        })
-        st.rerun()
+        
+        # Prepare the first silent prompt for Gemini to trigger the correct greeting
+        current_day = datetime.now().strftime("%A")
+        initial_prompt = f"The user's name is {name_input}. Start the session by saying: 'Hello {name_input}, for today {current_day}, we'll start with...' and follow the 5-4-3-2-1 system."
+        
+        with st.spinner("Lynn is preparing your session..."):
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            # Custom system instructions for the very first response
+            response = model.generate_content(f"SYSTEM: {initial_prompt}\nKNOWLEDGE: {lynn_knowledge}")
+            
+            # Store only the assistant's response to keep the chat clean
+            st.session_state.lynn_messages.append({"role": "assistant", "content": response.text})
+            st.rerun()
 
-# 4. Chat Interface (Main Interaction)
+# 4. Chat Interface
 else:
+    # Sidebar status
+    st.sidebar.title("🏢 Status")
+    st.sidebar.success(f"Coaching: {st.session_state.lynn_user_name}")
+    st.sidebar.info(f"System: 5-4-3-2-1 Active")
+
     # Display Chat History
     for msg in st.session_state.lynn_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 5. Coaching Logic & Prompting
+    # 5. Continuous Coaching Logic
     if prompt := st.chat_input("Reply to Lynn..."):
         st.session_state.lynn_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -76,48 +99,24 @@ else:
         
         with st.chat_message("assistant"):
             with st.spinner("Lynn is thinking..."):
-                # Get Today's context
                 current_day = datetime.now().strftime("%A")
                 current_date = datetime.now().strftime("%B %d, %Y")
                 
-                # The System Instruction (Prompts from your original code)
                 LYNN_CORE_PROMPT = f"""
                 You are Lynn, the Real Estate Productivity Coach.
                 User Name: {st.session_state.lynn_user_name}
                 Current Date: {current_day}, {current_date}
                 
-                YOUR GOAL: Guide the user through the 5-4-3-2-1 System.
+                MISSION: Guide the user through the 5-4-3-2-1 System.
+                KNOWLEDGE BASE: {lynn_knowledge}
                 
-                DAILY THEMES:
-                - Monday: Foundation & Pipeline Reset
-                - Tuesday: Contact Refresh & Market Awareness
-                - Wednesday: Video & Visibility
-                - Thursday: Relationships & Gratitude
-                - Friday: Weekly Review & Score Submission
-                
-                MEMORY RULE:
-                If the chat history shows you already greeted them today, DO NOT repeat the intro.
-                Just continue the coaching conversation.
-                
-                KNOWLEDGE BASE (Instructions & Scripts from PDFs):
-                {lynn_knowledge_context}
-                
-                STRUCTURE:
-                1. Greeting (Only if first msg of day)
-                2. Affirmation (3x)
-                3. 5 Calls (Scripts)
-                4. 4 Texts (Scripts)
-                5. 3 Emails (Templates)
-                6. 2 Social Actions
-                7. 1 CMA
-                8. MLS Check
-                9. Extra Task ({current_day} specific)
-                10. End: Accountability Check
-                
-                TONE: Disciplined, Structured, Motivational.
+                RULES:
+                - Always address the user as {st.session_state.lynn_user_name}.
+                - Maintain the daily theme for {current_day}.
+                - Provide specific scripts from the knowledge base.
+                - Be disciplined and motivational.
                 """
                 
-                # Format history for Gemini
                 history_lynn = []
                 for m in st.session_state.lynn_messages:
                     role = "user" if m["role"] == "user" else "model"
@@ -125,11 +124,8 @@ else:
 
                 try:
                     model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=LYNN_CORE_PROMPT)
-                    # We pass the full history so she "remembers"
                     response = model.generate_content(history_lynn)
-                    response_text = response.text
-                    
-                    st.markdown(response_text)
-                    st.session_state.lynn_messages.append({"role": "assistant", "content": response_text})
+                    st.markdown(response.text)
+                    st.session_state.lynn_messages.append({"role": "assistant", "content": response.text})
                 except Exception as e:
-                    st.error(f"Lynn Error: {str(e)}")
+                    st.error(f"Lynn encountered an error: {str(e)}")
