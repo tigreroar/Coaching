@@ -32,10 +32,6 @@ if "lynn_user_name" not in st.session_state:
 if "lynn_messages" not in st.session_state:
     st.session_state.lynn_messages = []
 
-# 2. Knowledge Loader (Brains of the Agent)
-st.sidebar.title("🧠 Lynn's Brain")
-lynn_files = st.sidebar.file_uploader("Upload Instructions/Scripts (Optional)", type=['pdf'], accept_multiple_files=True, key="lynn_uploader")
-
 # Function to extract text from uploaded PDFs
 lynn_knowledge_context = ""
 if lynn_files:
@@ -133,3 +129,4 @@ else:
                     st.session_state.lynn_messages.append({"role": "assistant", "content": response_text})
                 except Exception as e:
                     st.error(f"Lynn Error: {str(e)}")
+
