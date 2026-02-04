@@ -20,6 +20,30 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # ==========================================
+#           BACKEND HELPER FUNCTIONS
+# ==========================================
+
+def load_local_knowledge():
+    """Reads all PDF/TXT files from the local 'knowledge' folder automatically"""
+    knowledge_text = ""
+    knowledge_path = "knowledge"
+    
+    if os.path.exists(knowledge_path):
+        for filename in os.listdir(knowledge_path):
+            file_path = os.path.join(knowledge_path, filename)
+            try:
+                if filename.endswith(".pdf"):
+                    reader = PdfReader(file_path)
+                    for page in reader.pages:
+                        knowledge_text += page.extract_text() + "\n"
+                elif filename.endswith(".txt") or filename.endswith(".md"):
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        knowledge_text += f.read() + "\n"
+            except Exception as e:
+                print(f"Error reading {filename}: {e}")
+    return knowledge_text
+
+# ==========================================
 #           AGENT: LYNN LOGIC
 # ==========================================
 
@@ -32,20 +56,8 @@ if "lynn_user_name" not in st.session_state:
 if "lynn_messages" not in st.session_state:
     st.session_state.lynn_messages = []
 
-# 2. Knowledge Loader (Brains of the Agent)
-st.sidebar.title("🧠 Lynn's Brain")
-lynn_files = st.sidebar.file_uploader("Upload Instructions/Scripts (Optional)", type=['pdf'], accept_multiple_files=True, key="lynn_uploader")
-
-# Function to extract text from uploaded PDFs
-lynn_knowledge_context = ""
-if lynn_files:
-    for f in lynn_files:
-        try:
-            reader = PdfReader(f)
-            for page in reader.pages:
-                lynn_knowledge_context += page.extract_text() + "\n"
-        except Exception as e:
-            st.sidebar.error(f"Error reading {f.name}: {e}")
+# 2. Automatically Load Brain (No UI upload needed)
+lynn_knowledge = load_local_knowledge()
 
 # 3. User Name Check (First Interaction)
 if not st.session_state.lynn_user_name:
@@ -54,15 +66,23 @@ if not st.session_state.lynn_user_name:
     name_input = st.text_input("Your Name")
     if name_input:
         st.session_state.lynn_user_name = name_input
-        # Initial Greeting Trigger
+        # Initial Greeting Trigger - Custom format requested
+        current_day = datetime.now().strftime("%A")
+        initial_greeting = f"Hello {name_input}, for today {current_day}, we'll start with the coaching session."
+        
         st.session_state.lynn_messages.append({
-            "role": "user", 
-            "content": f"Hello {name_input}. Start the coaching session for today."
+            "role": "assistant", 
+            "content": initial_greeting
         })
         st.rerun()
 
 # 4. Chat Interface (Main Interaction)
 else:
+    # Sidebar status
+    st.sidebar.title("🏢 Status")
+    st.sidebar.success(f"Coaching: {st.session_state.lynn_user_name}")
+    st.sidebar.info(f"System: 5-4-3-2-1 Active")
+
     # Display Chat History
     for msg in st.session_state.lynn_messages:
         with st.chat_message(msg["role"]):
@@ -80,7 +100,6 @@ else:
                 current_day = datetime.now().strftime("%A")
                 current_date = datetime.now().strftime("%B %d, %Y")
                 
-                # The System Instruction (Prompts from your original code)
                 LYNN_CORE_PROMPT = f"""
                 You are Lynn, the Real Estate Productivity Coach.
                 User Name: {st.session_state.lynn_user_name}
@@ -95,24 +114,19 @@ else:
                 - Thursday: Relationships & Gratitude
                 - Friday: Weekly Review & Score Submission
                 
-                MEMORY RULE:
-                If the chat history shows you already greeted them today, DO NOT repeat the intro.
-                Just continue the coaching conversation.
-                
-                KNOWLEDGE BASE (Instructions & Scripts from PDFs):
-                {lynn_knowledge_context}
+                KNOWLEDGE BASE (Instructions & Scripts from your knowledge folder):
+                {lynn_knowledge}
                 
                 STRUCTURE:
-                1. Greeting (Only if first msg of day)
-                2. Affirmation (3x)
-                3. 5 Calls (Scripts)
-                4. 4 Texts (Scripts)
-                5. 3 Emails (Templates)
-                6. 2 Social Actions
-                7. 1 CMA
-                8. MLS Check
-                9. Extra Task ({current_day} specific)
-                10. End: Accountability Check
+                1. Affirmation (3x)
+                2. 5 Calls (Scripts)
+                3. 4 Texts (Scripts)
+                4. 3 Emails (Templates)
+                5. 2 Social Actions
+                6. 1 CMA
+                7. MLS Check
+                8. Extra Task ({current_day} specific)
+                9. End: Accountability Check
                 
                 TONE: Disciplined, Structured, Motivational.
                 """
@@ -125,7 +139,6 @@ else:
 
                 try:
                     model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=LYNN_CORE_PROMPT)
-                    # We pass the full history so she "remembers"
                     response = model.generate_content(history_lynn)
                     response_text = response.text
                     
