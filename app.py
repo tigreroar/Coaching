@@ -9,7 +9,7 @@ from pypdf import PdfReader
 load_dotenv()
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Lynn: Productivity Coach", layout="wide", page_icon="⭐")
+st.set_page_config(page_title="Your Agent Coach: Productivity", layout="wide", page_icon="⭐")
 
 # --- API KEY CONFIGURATION ---
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -47,7 +47,7 @@ def load_local_knowledge():
 #           AGENT: LYNN LOGIC
 # ==========================================
 
-st.markdown("### ⭐ Lynn: Productivity Coach")
+st.markdown("### ⭐ Your Agent Coach: Productivity")
 st.caption("I help you complete the 5-4-3-2-1 Daily System. Discipline equals freedom.")
 
 # 1. State Management (Memory for Name and Chat)
@@ -62,7 +62,7 @@ lynn_knowledge = load_local_knowledge()
 # 3. User Name Check (First Interaction)
 if not st.session_state.lynn_user_name:
     st.markdown("👋 **Welcome to the 5-4-3-2-1 System.**")
-    st.markdown("I'm Lynn. Before we begin, what is your name so I can coach you properly?")
+    st.markdown("I'm your Agent Coach. Before we begin, what is your name so I can coach you properly?")
     name_input = st.text_input("Your Name")
     if name_input:
         st.session_state.lynn_user_name = name_input
@@ -89,13 +89,13 @@ else:
             st.markdown(msg["content"])
 
     # 5. Coaching Logic & Prompting
-    if prompt := st.chat_input("Reply to Lynn..."):
+    if prompt := st.chat_input("Reply to Agent Coach..."):
         st.session_state.lynn_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
         
         with st.chat_message("assistant"):
-            with st.spinner("Lynn is thinking..."):
+            with st.spinner("Coach is thinking..."):
                 # Get Today's context
                 current_day = datetime.now().strftime("%A")
                 current_date = datetime.now().strftime("%B %d, %Y")
@@ -146,3 +146,4 @@ else:
                     st.session_state.lynn_messages.append({"role": "assistant", "content": response_text})
                 except Exception as e:
                     st.error(f"Lynn Error: {str(e)}")
+
