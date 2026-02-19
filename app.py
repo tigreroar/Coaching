@@ -138,7 +138,7 @@ else:
                     history_lynn.append({"role": role, "parts": [m["content"]]})
 
                 try:
-                    model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=LYNN_CORE_PROMPT)
+                    model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=LYNN_CORE_PROMPT)
                     response = model.generate_content(history_lynn)
                     response_text = response.text
                     
@@ -146,4 +146,5 @@ else:
                     st.session_state.lynn_messages.append({"role": "assistant", "content": response_text})
                 except Exception as e:
                     st.error(f"Lynn Error: {str(e)}")
+
 
